@@ -9,6 +9,7 @@ var debug = require('debug')('untitled:server');
 var http = require('http');
 var config = require('../config')
 var log = require('../libs/log')(module);
+
 /**
  * Get port from environment and store in Express.
  */
@@ -22,6 +23,15 @@ app.set('port', config.get('port'));
 
 var server = http.createServer(app);
 
+var io = require('socket.io')(server);
+
+io.sockets.on('connection', function (socket) {
+
+  socket.on('message', function(text, callback) {
+    socket.broadcast.emit('message', text);
+    callback();
+  });
+});
 /**
  * Listen on provided port, on all network interfaces.
  */

@@ -5,6 +5,12 @@ var logger = require('morgan');
 var cookieParser = require('cookie-parser');
 var bodyParser = require('body-parser');
 var log = require('libs/log')(module);
+var HttpError = require('error').HttpError;
+var errorhandler = require('errorhandler');
+var mongoose = require('libs/mongoose');
+var session = require('express-session');
+var config = require('config');
+var http = require('http');
 
 var app = express();
 
@@ -29,10 +35,41 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.get('/', function(req, res, next){
-   res.render("index", {
+var MongoStore = require('connect-mongo')(session);
 
-   });
+app.use(session({
+  secret: config.get('session:secret'),
+  key: config.get('session:key'),
+  cookie: config.get('session:cookie'),
+  store: new MongoStore({mongoose_connection: mongoose.connection})
+}));
+
+//app.use(function(req, res, next){
+//  req.session.numberOfVisits = req.session.numberOfVisits + 1 || 1;
+//  res.send("Visits: " + req.session.numberOfVisits);
+//});
+
+app.use(require('middleware/sendHttpError'));
+app.use(require('middleware/loadUser'));
+
+require('routes')(app);
+
+app.use(function (err, req, res, next) {
+  if(typeof err == 'number') {
+    err = new HttpError(err);
+  }
+
+  if (err instanceof HttpError) {
+    res.sendHttpError(err);
+  } else {
+    if(app.get('env') == 'development') {
+      errorhandler()(err, req, res, next);
+    }else {
+      log.error(err);
+      err = new HttpError(500);
+      res.sendHttpError(err);
+    }
+  }
 });
 
 // catch 404 and forward to error handler
@@ -43,7 +80,6 @@ app.use(function(req, res, next) {
 });
 
 // error handlers
-
 // development error handler
 // will print stacktrace
 if (app.get('env') === 'development') {
